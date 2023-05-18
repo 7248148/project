@@ -1,0 +1,65 @@
+# GitHub Actions build workflow
+name: build
+
+on: ["push", "pull_request"]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Python - Linux
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.7
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Install Python - macOS/Windows
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+        if: matrix.os != 'ubuntu-latest'
+
+      - name: Install Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: "zulu"
+          java-version: "8"
+
+      - name: Install dependencies - Linux
+        run: sudo apt-get install libsndfile1
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Install dependencies - macOS
+        run: |
+          brew install libomp
+          pip install torch==1.12.1 torchvision==0.13.1
+        if: matrix.os == 'macos-latest'
+
+      - name: Install dependencies - Windows
+        run: choco install wget
+        if: matrix.os == 'windows-latest'
+
+      - name: Build
+        run: |
+          pip install -U wheel
+          pip install .[all,dev]
+          python -c "import nltk; nltk.download('punkt')"
+          python --version
+          make data coverage
+
+      - uses: pre-commit/action@v3.0.0
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Test Coverage
+        run: coveralls --service=github
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
